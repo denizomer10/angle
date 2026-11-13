@@ -19,6 +19,7 @@
 #include <atomic>
 #if defined(ANGLE_PLATFORM_APPLE)
 #    include <dispatch/dispatch.h>
+#    include <pthread.h>
 #endif
 namespace egl
 {
@@ -30,11 +31,18 @@ static_assert(std::is_trivially_destructible<decltype(g_LastContext)>::value,
 
 bool g_EGLValidationEnabled = true;
 
-// Called only on Android platform
+// Retain the original Thread pointer through TLS teardown. On Apple, the
+// ordinary current-thread TLS slot may already be cleared when a client
+// destructor calls eglReleaseThread, leaving the context owned by a dead thread.
 [[maybe_unused]] void ThreadCleanupCallback(void *ptr)
 {
     egl::Thread *thread = static_cast<egl::Thread *>(ptr);
     ASSERT(thread);
+#if defined(ANGLE_PLATFORM_APPLE)
+    // pthread teardown may clear this slot before invoking the cleanup key.
+    // ReleaseThread's scoped current-context synchronization still needs it.
+    SetCurrentThreadTLS(thread);
+#endif
     ANGLE_SCOPED_GLOBAL_LOCK();
     // ReleaseThread() and makeCurrent() inside will perform:
     // - destroy Context if it was already marked for destruction;
@@ -42,6 +50,9 @@ bool g_EGLValidationEnabled = true;
     // - perform Display termination when no active threads (and current Contexts);
     // - release any invalid objects in case if Display was not terminated.
     (void)ReleaseThread(thread);
+#if defined(ANGLE_PLATFORM_APPLE)
+    SetCurrentThreadTLS(nullptr);
+#endif
 }
 
 Thread *AllocateCurrentThread()
@@ -64,7 +75,7 @@ Thread *AllocateCurrentThread()
     // Initialize current-context TLS slot
     gl::SetCurrentValidContext(nullptr);
 
-#if defined(ANGLE_PLATFORM_ANDROID)
+#if defined(ANGLE_PLATFORM_ANDROID) || defined(ANGLE_PLATFORM_APPLE)
     static pthread_once_t keyOnce                 = PTHREAD_ONCE_INIT;
     static angle::TLSIndex gThreadCleanupTLSIndex = TLS_INVALID_INDEX;
 
@@ -77,7 +88,7 @@ Thread *AllocateCurrentThread()
 
     // Initialize thread cleanup TLS slot
     angle::SetTLSValue(gThreadCleanupTLSIndex, thread);
-#endif  // ANGLE_PLATFORM_ANDROID
+#endif  // ANGLE_PLATFORM_ANDROID || ANGLE_PLATFORM_APPLE
 
     ASSERT(thread);
     return thread;
