@@ -24,7 +24,11 @@ namespace angle
 
 const char *GetSharedLibraryExtension()
 {
+#if defined(ANGLE_PLATFORM_MACCATALYST)
+    return "dylib";
+#else
     return "framework";
+#endif
 }
 
 }  // namespace angle

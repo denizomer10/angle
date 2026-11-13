@@ -543,9 +543,11 @@ template("angle_shared_library") {
   # On ios, define an ios_framework_bundle instead of a shared library.
   # ios_framework_bundle doesn't automatically link, so we have to create
   # a group that links and bundles the framework as well.
+  # Catalyst supports ordinary dylibs; keep GLES libraries relocatable together.
+  _use_ios_framework = is_ios && target_environment != "catalyst"
   target_type = "shared_library"
   internal_target_name = target_name
-  if (is_ios) {
+  if (_use_ios_framework) {
     target_type = "ios_framework_bundle"
     internal_target_name = target_name + "_framework"
   }
@@ -579,7 +581,7 @@ template("angle_shared_library") {
       configs += [ angle_root + ":build_id_config" ]
       configs -= [ "//build/config/android:hide_all_but_jni_onload" ]
     }
-    if (is_ios) {
+    if (_use_ios_framework) {
       info_plist = "$angle_root/util/ios/Info.plist"
 
       # shared libraries are hidden inside ios_framework_bundle, but we include
@@ -588,7 +590,7 @@ template("angle_shared_library") {
       check_includes = false
     }
   }
-  if (is_ios) {
+  if (_use_ios_framework) {
     group(target_name) {
       forward_variables_from(invoker,
                              [

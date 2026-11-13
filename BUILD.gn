@@ -788,6 +788,10 @@ angle_static_library("angle_gpu_info_util") {
       frameworks += [ "IOKit.framework" ]
       sources += libangle_gpu_info_util_mac_sources
     }
+    if (is_ios && target_environment == "catalyst") {
+      # apple_platform_utils queries the host model on Catalyst as well.
+      frameworks += [ "IOKit.framework" ]
+    }
     if (is_ios && !angle_enable_cgl) {
       sources += libangle_gpu_info_util_ios_sources
     }
