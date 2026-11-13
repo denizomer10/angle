@@ -288,6 +288,7 @@ libangle_headers = [
   "src/libANGLE/Debug.h",
   "src/libANGLE/Device.h",
   "src/libANGLE/Display.h",
+  "src/libANGLE/PearContextThreadSharing.h",
   "src/libANGLE/EGLSync.h",
   "src/libANGLE/Error.h",
   "src/libANGLE/Error.inc",

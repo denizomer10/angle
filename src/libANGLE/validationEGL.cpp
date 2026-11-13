@@ -6,6 +6,7 @@
 
 // validationEGL.cpp: Validation functions for generic EGL entry point parameters
 
+#include "libANGLE/PearContextThreadSharing.h"
 #include <array>
 
 #include "common/unsafe_buffers.h"
@@ -1488,9 +1489,12 @@ bool ValidateCompatibleSurface(const ValidationContext *val,
 
 bool ValidateSurfaceBadAccess(const ValidationContext *val,
                               const gl::Context *previousContext,
-                              const Surface *surface)
+                              const Surface *surface,
+                              const gl::Context *nextContext = nullptr)
 {
-    if (surface->isCurrentOnAnyThread() &&
+    bool sameSharedContext = nextContext && PearIsThreadShared(nextContext) &&
+        (surface == nextContext->getCurrentDrawSurface() || surface == nextContext->getCurrentReadSurface());
+    if (!sameSharedContext && surface->isCurrentOnAnyThread() &&
         (previousContext == nullptr || (surface != previousContext->getCurrentDrawSurface() &&
                                         surface != previousContext->getCurrentReadSurface())))
     {
@@ -1827,6 +1831,13 @@ bool ValidateCreateContextAttribute(const ValidationContext *val,
 {
     switch (attribute)
     {
+        case kPearSerializedThreadSharing:
+#if defined(ANGLE_ENABLE_CONTEXT_MUTEX) && defined(ANGLE_ENABLE_METAL)
+            break;
+#else
+            val->setError(EGL_BAD_ATTRIBUTE, "Pear thread sharing requires serialized Metal contexts");
+            return false;
+#endif
         case EGL_CONTEXT_CLIENT_VERSION:
         case EGL_CONTEXT_MINOR_VERSION:
         case EGL_CONTEXT_FLAGS_KHR:
@@ -2082,6 +2093,13 @@ bool ValidateCreateContextAttributeValue(const ValidationContext *val,
         case EGL_CONTEXT_OPENGL_DEBUG:
         case EGL_CONTEXT_VIRTUALIZATION_GROUP_ANGLE:
         case EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR:
+            break;
+
+        case kPearSerializedThreadSharing:
+            if (value != EGL_TRUE && value != EGL_FALSE) {
+                val->setError(EGL_BAD_ATTRIBUTE, "Pear thread sharing must be boolean");
+                return false;
+            }
             break;
 
         case EGL_CONTEXT_FLAGS_KHR:
@@ -3730,7 +3748,7 @@ bool ValidateMakeCurrent(const ValidationContext *val,
     const gl::Context *previousContext = val->eglThread->getContext();
     if (context != nullptr && context != previousContext)
     {
-        if (context->isCurrentOnAnyThread())
+        if (context->isCurrentOnAnyThread() && !PearIsThreadShared(context))
         {
             val->setError(EGL_BAD_ACCESS, "Context can only be current on one thread");
             return false;
@@ -3749,14 +3767,14 @@ bool ValidateMakeCurrent(const ValidationContext *val,
     {
         ANGLE_VALIDATION_TRY(ValidateSurface(val, display, readSurface));
         ANGLE_VALIDATION_TRY(ValidateCompatibleSurface(val, display, context, readSurface));
-        ANGLE_VALIDATION_TRY(ValidateSurfaceBadAccess(val, previousContext, readSurface));
+        ANGLE_VALIDATION_TRY(ValidateSurfaceBadAccess(val, previousContext, readSurface, context));
     }
 
     if (drawSurface != readSurface && !noDraw)
     {
         ANGLE_VALIDATION_TRY(ValidateSurface(val, display, drawSurface));
         ANGLE_VALIDATION_TRY(ValidateCompatibleSurface(val, display, context, drawSurface));
-        ANGLE_VALIDATION_TRY(ValidateSurfaceBadAccess(val, previousContext, drawSurface));
+        ANGLE_VALIDATION_TRY(ValidateSurfaceBadAccess(val, previousContext, drawSurface, context));
     }
     return true;
 }

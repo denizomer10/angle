@@ -9,6 +9,9 @@
 // [EGL 1.4] section 2.1.2 page 3.
 
 #include "libANGLE/Display.h"
+#include "libANGLE/PearContextThreadSharing.h"
+#include <map>
+#include <mutex>
 #include "common/unsafe_buffers.h"
 
 #include <algorithm>
@@ -103,6 +106,51 @@
 
 namespace egl
 {
+
+// ContextMutex serializes validation, make-current and every GLES command.
+// This small registry extends binding lifetime only for flagged contexts;
+// ordinary EGL contexts and their validation remain unchanged.
+struct PearThreadSharedRegistry {
+    std::mutex mutex;
+    std::map<const gl::Context *, unsigned> bindings;
+};
+static PearThreadSharedRegistry &PearThreadSharedContexts() {
+    static angle::base::NoDestructor<PearThreadSharedRegistry> registry;
+    return *registry;
+}
+bool PearIsThreadShared(const gl::Context *context) {
+    auto &registry = PearThreadSharedContexts();
+    std::lock_guard<std::mutex> lock(registry.mutex);
+    return registry.bindings.find(context) != registry.bindings.end();
+}
+void PearRegisterThreadShared(gl::Context *context, bool enabled) {
+    if (!enabled) return;
+    auto &registry = PearThreadSharedContexts();
+    std::lock_guard<std::mutex> lock(registry.mutex);
+    registry.bindings.emplace(context, 0);
+}
+void PearForgetThreadShared(gl::Context *context) {
+    auto &registry = PearThreadSharedContexts();
+    std::lock_guard<std::mutex> lock(registry.mutex);
+    auto found = registry.bindings.find(context);
+    ASSERT(found == registry.bindings.end() || found->second == 0);
+    registry.bindings.erase(context);
+}
+bool PearAddThreadBinding(gl::Context *context) {
+    auto &registry = PearThreadSharedContexts();
+    std::lock_guard<std::mutex> lock(registry.mutex);
+    auto found = registry.bindings.find(context);
+    if (found == registry.bindings.end()) return true;
+    return found->second++ == 0;
+}
+bool PearRemoveThreadBinding(gl::Context *context) {
+    auto &registry = PearThreadSharedContexts();
+    std::lock_guard<std::mutex> lock(registry.mutex);
+    auto found = registry.bindings.find(context);
+    if (found == registry.bindings.end()) return true;
+    ASSERT(found->second > 0);
+    return --found->second == 0;
+}
 
 namespace
 {
@@ -2194,6 +2242,7 @@ Error Display::createContext(const Config *configuration,
     }
 
     ASSERT(context != nullptr);
+    PearRegisterThreadShared(context, attribs.get(kPearSerializedThreadSharing, EGL_FALSE) == EGL_TRUE);
     mState.contextMap.insert(context->id(), context);
 
     ASSERT(outContext != nullptr);
@@ -2227,10 +2276,11 @@ Error ThreadSafeDisplay::makeCurrentLocked(Thread *thread,
     {
         previousContext->getContextMutex().assertLocked();
 
-        previousContext->setIsCurrentOnAnyThread(false);
+        bool lastBinding = PearRemoveThreadBinding(previousContext);
+        if (lastBinding) previousContext->setIsCurrentOnAnyThread(false);
         thread->setCurrent(nullptr);
 
-        auto error = previousContext->unMakeCurrent();
+        auto error = lastBinding ? previousContext->unMakeCurrent() : NoError();
         // Drop the reference that the thread held while the context was current.  If the context
         // is destroyed, and that was the last reference, free it, while its ContextMutex is still
         // locked (and kept alive by the caller).  The previous Context may have been created with
@@ -2260,12 +2310,17 @@ Error ThreadSafeDisplay::makeCurrentLocked(Thread *thread,
 
         if (context != nullptr)
         {
-            ANGLE_TRY(context->makeCurrent(this, drawSurface, readSurface));
+            bool existingSharedBinding = PearIsThreadShared(context) && context->isCurrentOnAnyThread();
+            if (!existingSharedBinding || context->getCurrentDrawSurface() != drawSurface ||
+                context->getCurrentReadSurface() != readSurface)
+                ANGLE_TRY(context->makeCurrent(this, drawSurface, readSurface));
             if (contextChanged)
             {
-                // eglMakeCurrent() validation fails if the context is current on another thread.
-                ASSERT(!context->isCurrentOnAnyThread());
-                context->setIsCurrentOnAnyThread(true);
+                bool firstBinding = PearAddThreadBinding(context);
+                if (firstBinding) {
+                    ASSERT(!context->isCurrentOnAnyThread());
+                    context->setIsCurrentOnAnyThread(true);
+                }
                 // The thread holds a reference to its current context.
                 context->addRef();
             }
@@ -2314,6 +2369,7 @@ void Display::destroyStreamImpl(Stream *stream, StreamSet *streams)
 Error ThreadSafeDisplay::destroyContextImpl(gl::Context *context)
 {
     ASSERT(context->getRefCount() == 0 && context->isDestroyed());
+    PearForgetThreadShared(context);
     // Use scoped_ptr to make sure the context is always freed.
     std::unique_ptr<gl::Context> uniqueContextPtr(context);
 
