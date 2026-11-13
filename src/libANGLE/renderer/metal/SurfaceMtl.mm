@@ -460,7 +460,10 @@ egl::Error WindowSurfaceMtl::initialize(const egl::ThreadSafeDisplay *display)
         {
             mMetalLayer.get().contentsScale = mLayer.contentsScale;
 
-            [mLayer addSublayer:mMetalLayer.get()];
+            // PearRuntime: below the host's own sublayers. A CAEAGLLayer's GL
+            // content is the layer itself, under anything the app adds to it
+            // (GTA III plays its intro movie in a sublayer of the GL view).
+            [mLayer insertSublayer:mMetalLayer.get() atIndex:0];
         }
 
         // ensure drawableSize is set to correct value:
