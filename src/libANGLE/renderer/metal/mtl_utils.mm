@@ -884,6 +884,21 @@ static MTLLanguageVersion GetUserSetOrHighestMSLVersion(const MTLLanguageVersion
                 assert(0 && "Unsupported MSL Major Language Version.");
         }
     }
+    // PearRuntime: MTLCompileOptions defaults to the MSL version of the SDK the
+    // *app* was linked against. An iOS 10 era game gets MSL 1.2, where ANGLE's
+    // internal shaders do not compile (no `assert`) and the display fails to
+    // initialize. Use at least the version modern SDKs default to.
+    if (@available(macOS 13.0, iOS 16.0, macCatalyst 16.0, *))
+    {
+        if (currentVersion < MTLLanguageVersion3_0)
+        {
+            return MTLLanguageVersion3_0;
+        }
+    }
+    else if (currentVersion < MTLLanguageVersion2_4)
+    {
+        return MTLLanguageVersion2_4;
+    }
     return currentVersion;
 }
 
