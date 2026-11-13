@@ -444,7 +444,8 @@ egl::Error WindowSurfaceMtl::initialize(const egl::ThreadSafeDisplay *display)
         else
         {
             mMetalLayer             = angle::adoptObjCPtr([[CAMetalLayer alloc] init]);
-            mMetalLayer.get().frame = mLayer.frame;
+            // The child is in the native host's coordinate space, not its parent's.
+            mMetalLayer.get().frame = mLayer.bounds;
         }
 
         mMetalLayer.get().device          = metalDevice;
