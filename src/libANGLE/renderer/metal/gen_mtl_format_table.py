@@ -516,17 +516,6 @@ def gen_image_map_switch_string(image_table, angle_to_gl):
                                                         angle_to_gl, bc)
     switch_data += "#endif // BC formats on iOS/tvOS/visionOS \n"
 
-    # PearRuntime: PVRTC on Mac Catalyst (Apple silicon), which uses the mac branch.
-    switch_data += "#    if TARGET_OS_MACCATALYST\n"
-    switch_data += "#    pragma clang diagnostic push\n"
-    switch_data += "#    pragma clang diagnostic ignored \"-Wdeprecated-declarations\"\n"
-    for angle_format in sorted(ios_specific_map.keys()):
-        if is_format_deprecated(ios_specific_map[angle_format]):
-            switch_data += gen_image_map_switch_simple_case(angle_format, angle_format, angle_to_gl,
-                                                            ios_specific_map)
-    switch_data += "#    pragma clang diagnostic pop\n"
-    switch_data += "#    endif  // PVRTC on Mac Catalyst\n"
-
     # iOS specific
     switch_data += "#elif TARGET_OS_IPHONE && !TARGET_OS_MACCATALYST\n"
     # Tracks whether the pixel format family being added to `switch_data` is deprecated.
@@ -567,6 +556,19 @@ def gen_image_map_switch_string(image_table, angle_to_gl):
     switch_data += "#endif // BC formats on iOS/tvOS/visionOS \n"
 
     switch_data += "#endif // TARGET_OS_IPHONE\n"
+
+    # PearRuntime: PVRTC on Mac Catalyst (Apple silicon), which uses the mac branch above.
+    # Top level: the iOS branch excludes Catalyst and the simulator branch never matches it.
+    switch_data += "#if TARGET_OS_MACCATALYST\n"
+    switch_data += "#    pragma clang diagnostic push\n"
+    switch_data += "#    pragma clang diagnostic ignored \"-Wdeprecated-declarations\"\n"
+    for angle_format in sorted(ios_specific_map.keys()):
+        if is_format_deprecated(ios_specific_map[angle_format]):
+            switch_data += gen_image_map_switch_simple_case(angle_format, angle_format, angle_to_gl,
+                                                            ios_specific_map)
+    switch_data += "#    pragma clang diagnostic pop\n"
+    switch_data += "#endif  // PVRTC on Mac Catalyst\n"
+
 
     # Try to support all iOS formats on newer macOS with Apple GPU.
     switch_data += "#if (TARGET_OS_OSX && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 110000))\n"
