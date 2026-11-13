@@ -1652,6 +1652,61 @@ void Format::init(const DisplayMtl *display, angle::FormatID intendedFormatId_)
             break;
 
 #    endif  // BC formats on iOS/tvOS/visionOS
+#    if TARGET_OS_MACCATALYST
+        // PearRuntime: Mac Catalyst on Apple silicon supports PVRTC (Apple GPU family 1+);
+        // iOS games ship PVRTC textures and rendered untextured without these.
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        case angle::FormatID::PVRTC1_RGBA_2BPP_UNORM_BLOCK:
+
+            this->metalFormat    = MTLPixelFormatPVRTC_RGBA_2BPP;
+            this->actualFormatId = angle::FormatID::PVRTC1_RGBA_2BPP_UNORM_BLOCK;
+            break;
+
+        case angle::FormatID::PVRTC1_RGBA_2BPP_UNORM_SRGB_BLOCK:
+
+            this->metalFormat    = MTLPixelFormatPVRTC_RGBA_2BPP_sRGB;
+            this->actualFormatId = angle::FormatID::PVRTC1_RGBA_2BPP_UNORM_SRGB_BLOCK;
+            break;
+
+        case angle::FormatID::PVRTC1_RGBA_4BPP_UNORM_BLOCK:
+
+            this->metalFormat    = MTLPixelFormatPVRTC_RGBA_4BPP;
+            this->actualFormatId = angle::FormatID::PVRTC1_RGBA_4BPP_UNORM_BLOCK;
+            break;
+
+        case angle::FormatID::PVRTC1_RGBA_4BPP_UNORM_SRGB_BLOCK:
+
+            this->metalFormat    = MTLPixelFormatPVRTC_RGBA_4BPP_sRGB;
+            this->actualFormatId = angle::FormatID::PVRTC1_RGBA_4BPP_UNORM_SRGB_BLOCK;
+            break;
+
+        case angle::FormatID::PVRTC1_RGB_2BPP_UNORM_BLOCK:
+
+            this->metalFormat    = MTLPixelFormatPVRTC_RGB_2BPP;
+            this->actualFormatId = angle::FormatID::PVRTC1_RGB_2BPP_UNORM_BLOCK;
+            break;
+
+        case angle::FormatID::PVRTC1_RGB_2BPP_UNORM_SRGB_BLOCK:
+
+            this->metalFormat    = MTLPixelFormatPVRTC_RGB_2BPP_sRGB;
+            this->actualFormatId = angle::FormatID::PVRTC1_RGB_2BPP_UNORM_SRGB_BLOCK;
+            break;
+
+        case angle::FormatID::PVRTC1_RGB_4BPP_UNORM_BLOCK:
+
+            this->metalFormat    = MTLPixelFormatPVRTC_RGB_4BPP;
+            this->actualFormatId = angle::FormatID::PVRTC1_RGB_4BPP_UNORM_BLOCK;
+            break;
+
+        case angle::FormatID::PVRTC1_RGB_4BPP_UNORM_SRGB_BLOCK:
+
+            this->metalFormat    = MTLPixelFormatPVRTC_RGB_4BPP_sRGB;
+            this->actualFormatId = angle::FormatID::PVRTC1_RGB_4BPP_UNORM_SRGB_BLOCK;
+            break;
+
+#    pragma clang diagnostic pop
+#    endif  // PVRTC on Mac Catalyst
 #elif TARGET_OS_IPHONE && !TARGET_OS_MACCATALYST
         case angle::FormatID::ASTC_10x10_SRGB_BLOCK:
 
@@ -4194,7 +4249,7 @@ void FormatTable::initNativeFormatCapsAutogen(const DisplayMtl *display)
                       display->supportsDepth24Stencil8PixelFormat());
 
 #endif  // TARGET_OS_OSX || TARGET_OS_MACCATALYST
-#if (TARGET_OS_IPHONE && !TARGET_OS_MACCATALYST) || \
+#if (TARGET_OS_IPHONE && !TARGET_OS_MACCATALYST) || TARGET_OS_MACCATALYST || \
     (TARGET_OS_OSX && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 110000))
     setFormatCaps(MTLPixelFormatA1BGR5Unorm, /** filterable*/ display->supportsAppleGPUFamily(1),
                   /** writable*/ false, /** blendable*/ display->supportsAppleGPUFamily(1),
