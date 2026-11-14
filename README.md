@@ -6,15 +6,21 @@ implementation maintained by Google and the ANGLE contributors. It provides the
 OpenGL ES 1.1, 2.0 and 3.x implementation, running on Metal, that iOS games use
 when PearSilicon runs them on Apple silicon Macs.
 
-The fork stays close to upstream. It carries a small set of patches for the
-Metal backend and for Mac Catalyst builds, and nothing else. Everything else,
-and almost all of the code, is ANGLE's work. The upstream project README is kept
+PearANGLE targets **Apple silicon Macs only, with the Metal back end only**
+(macOS and Mac Catalyst, arm64). On the `apple-silicon` branch the Direct3D,
+desktop OpenGL, Vulkan, WebGPU, null and OpenCL back ends, the HLSL, WGSL and
+SPIR-V shader translators, Windows/Android/Linux/Fuchsia/Ozone platform code,
+Perfetto tracing and the test-suite and trace dependencies are removed; `DEPS`
+fetches only what the Metal build needs. `gni/angle.gni` asserts arm64 Apple
+targets with Metal only. Everything that remains, and almost all of the code,
+is ANGLE's work. The upstream project README is kept
 as [README.ANGLE.md](README.ANGLE.md).
 
 ## Where it is used
 
 | Consumer | Build | How it is loaded |
 | --- | --- | --- |
+| PearRuntime PearHost (`host/build-pearangle.sh`) | macOS arm64, Metal only | re-exported by PearHost's `OpenGLES.framework` for iOS apps that run without iOSSupport |
 | [PearRuntime](https://github.com/denizomer10/PearRuntime) | Mac Catalyst, arm64 (`arm64-apple-ios15.0-macabi`), Metal only | `libEGL.dylib` and `libGLESv2.dylib` are copied into each prepared iOS app and loaded by PearRuntime's GLES/EAGL bridge |
 | [PearLegacyEngine](https://github.com/denizomer10/PearLegacyEngine) | macOS arm64, Metal | `touchHLE_dylibs/angle/`, loaded by the 32-bit iOS engine |
 
